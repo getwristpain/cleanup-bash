@@ -98,9 +98,11 @@ deep_clean() {
   clean_files "/tmp" "temporary"
   clean_files "/var/tmp" "temporary"
   
-  # Additional cleanup tasks (APT, YUM/DNF, Docker, etc.)
-  # Skipped for brevity
-  
+  # Clean unused APT packages
+  print_message "Removing unused APT packages..."
+  apt autoremove -y || { echo "Failed to remove unused packages via APT"; return 1; }
+
+  # Additional cleanup tasks can be added here
   print_message "Deep clean completed successfully!"
 }
 
