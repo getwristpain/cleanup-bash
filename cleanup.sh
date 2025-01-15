@@ -11,6 +11,58 @@ function print_message {
   echo -e "\e[1;34m$1\e[0m"
 }
 
+# Function to display help
+function display_help {
+  echo "Usage: $0 [options]"
+  echo ""
+  echo "Options:"
+  echo "  --help      Display this help message and exit."
+  echo "  --install   Install this script to the user's home directory and set up alias."
+  echo ""
+  echo "Description:"
+  echo "This script performs a comprehensive system cleanup by removing unnecessary files,"
+  echo "orphaned packages, hidden cache files, and old kernels. It also offers options for"
+  echo "installing the script to your home directory and setting up an alias for quick access."
+  exit 0
+}
+
+# Function to install the script and create alias
+function install_script {
+  print_message "Installing the cleanup script to the user's home directory..."
+
+  # Get the current user's home directory
+  user_home=$(eval echo ~$SUDO_USER)
+
+  # Define the installation location
+  install_path="$user_home/cleanup_script.sh"
+
+  # Copy the script to the user's home directory
+  cp "$0" "$install_path" || { echo "Failed to copy the script to $install_path"; exit 1; }
+
+  # Set permissions to make the script executable
+  chmod +x "$install_path" || { echo "Failed to set execute permission"; exit 1; }
+
+  # Add alias to .bash_aliases
+  if [[ -f "$user_home/.bash_aliases" ]]; then
+    echo "alias cleanup='bash $install_path'" >> "$user_home/.bash_aliases"
+  else
+    echo "alias cleanup='bash $install_path'" > "$user_home/.bash_aliases"
+  fi
+
+  # Inform the user to reload their shell or source the .bash_aliases
+  print_message "Script installed successfully!"
+  print_message "Alias 'cleanup' has been added to your .bash_aliases."
+  print_message "Please run 'source ~/.bash_aliases' or restart your terminal to activate the alias."
+  exit 0
+}
+
+# Check for command-line arguments
+if [[ "$1" == "--help" ]]; then
+  display_help
+elif [[ "$1" == "--install" ]]; then
+  install_script
+fi
+
 # Function to clean up unnecessary files
 function clean_files {
   local target_dir=$1
@@ -96,11 +148,11 @@ while true; do
   read -p "Do you want to perform a deep clean of the system? (yes/no) [yes]: " deep_clean_choice
   deep_clean_choice=${deep_clean_choice:-yes}
   case "$deep_clean_choice" in
-    [Yy][Ee][Ss])
+    [Yy]*)
       deep_clean
       break
       ;;
-    [Nn][Oo])
+    [Nn]*)
       print_message "Deep clean skipped."
       exit 0
       ;;
@@ -113,14 +165,14 @@ done
 # Confirm and execute system reboot
 while true; do
   read -p "Do you want to reboot the system now? (yes/no) [yes]: " reboot_choice
-  reboot_choice=${reboot_choice:-yes} # Default to "yes" if no input is provided
+  reboot_choice=${reboot_choice:-yes}
   case "$reboot_choice" in
-    [Yy][Ee][Ss])
+    [Yy]*)
       print_message "Rebooting the system..."
       reboot
       break
       ;;
-    [Nn][Oo])
+    [Nn]*)
       print_message "Reboot skipped. You can reboot later if needed."
       break
       ;;
