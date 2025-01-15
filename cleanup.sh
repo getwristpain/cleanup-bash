@@ -7,92 +7,100 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Function to display styled messages
-function print_message {
+print_message() {
   echo -e "\e[1;34m$1\e[0m"
 }
 
-# Function to display help
-function display_help {
+# Display help message
+display_help() {
   echo "Usage: $0 [options]"
   echo ""
   echo "Options:"
   echo "  --help      Display this help message and exit."
   echo "  --install   Install this script to the user's home directory and set up alias."
+  echo "  --update    Update the script by fetching and pulling the latest changes from GitHub."
   echo ""
   echo "Description:"
   echo "This script performs a comprehensive system cleanup by removing unnecessary files,"
   echo "orphaned packages, hidden cache files, and old kernels. It also offers options for"
   echo "installing the script to your home directory and setting up an alias for quick access."
+  echo ""
+  echo "Credits:"
+  echo "  Script created by: Reas Vyn"
+  echo "  GitHub Repository: https://github.com/getwristpain/cleanup-bash"
   exit 0
 }
 
-# Function to install the script and create alias
-function install_script {
+
+# Install script to user's home directory and set up alias
+install_script() {
   print_message "Installing the cleanup script to the user's home directory..."
 
-  # Get the current user's home directory
   user_home=$(eval echo ~$SUDO_USER)
-
-  # Define the installation location
   install_path="$user_home/cleanup_script.sh"
 
-  # Copy the script to the user's home directory
   cp "$0" "$install_path" || { echo "Failed to copy the script to $install_path"; exit 1; }
-
-  # Set permissions to make the script executable
   chmod +x "$install_path" || { echo "Failed to set execute permission"; exit 1; }
 
-  # Add alias to .bash_aliases
   if [[ -f "$user_home/.bash_aliases" ]]; then
     echo "alias cleanup='bash $install_path'" >> "$user_home/.bash_aliases"
   else
     echo "alias cleanup='bash $install_path'" > "$user_home/.bash_aliases"
   fi
 
-  # Inform the user to reload their shell or source the .bash_aliases
   print_message "Script installed successfully!"
   print_message "Alias 'cleanup' has been added to your .bash_aliases."
   print_message "Please run 'source ~/.bash_aliases' or restart your terminal to activate the alias."
   exit 0
 }
 
-# Check for command-line arguments
-if [[ "$1" == "--help" ]]; then
-  display_help
-elif [[ "$1" == "--install" ]]; then
-  install_script
-fi
+# Function to update the script from GitHub
+update_script() {
+  print_message "Checking for script updates from GitHub..."
+
+  # Git repository URL (replace with your repository's URL)
+  repo_url="https://github.com/yourusername/yourrepo.git"
+  temp_dir=$(mktemp -d)
+
+  # Clone the repository into a temporary directory and check for updates
+  git clone "$repo_url" "$temp_dir" || { echo "Failed to clone repository"; exit 1; }
+  cd "$temp_dir" || exit 1
+
+  # Fetch latest changes and pull the latest commit
+  git fetch --all || { echo "Failed to fetch updates"; exit 1; }
+  git pull origin main || { echo "Failed to pull the latest changes"; exit 1; }
+
+  # Replace the current script with the updated one
+  cp "$temp_dir/cleanup_script.sh" "$0" || { echo "Failed to update the script"; exit 1; }
+
+  print_message "Script updated successfully!"
+  exit 0
+}
 
 # Function to clean up unnecessary files
-function clean_files {
+clean_files() {
   local target_dir=$1
   local file_type=$2
 
   if [[ -d "$target_dir" ]]; then
     print_message "Cleaning $file_type files in $target_dir..."
-    find "$target_dir" -type f -exec rm -f {} \; || {
-      echo "Failed to clean $file_type files in $target_dir"
-      return 1
-    }
+    find "$target_dir" -type f -exec rm -f {} \; || { echo "Failed to clean $file_type files in $target_dir"; return 1; }
     print_message "Cleaned $file_type files in $target_dir successfully!"
   else
     echo "Directory $target_dir does not exist, skipping..."
   fi
 }
 
-# Deep clean function
-function deep_clean {
+# Deep clean system files
+deep_clean() {
   print_message "Starting deep clean for all unnecessary system files..."
 
-  # Remove all files in /tmp and /var/tmp
   clean_files "/tmp" "temporary"
   clean_files "/var/tmp" "temporary"
 
-  # Clear systemd journals
   print_message "Clearing all systemd journals..."
   journalctl --vacuum-size=50M || { echo "Failed to clean systemd journals"; exit 1; }
 
-  # Remove unnecessary apt/yum/dnf cache
   if command -v apt > /dev/null; then
     print_message "Cleaning APT cache..."
     apt-get clean || { echo "Failed to clean APT cache"; exit 1; }
@@ -107,7 +115,6 @@ function deep_clean {
     fi
   fi
 
-  # Clean hidden caches in home directories
   for user_dir in /home/*; do
     if [[ -d "$user_dir" ]]; then
       print_message "Cleaning hidden cache files in $user_dir..."
@@ -117,13 +124,11 @@ function deep_clean {
     fi
   done
 
-  # Clean orphaned packages on Debian systems
   if command -v deborphan > /dev/null; then
     print_message "Removing orphaned packages..."
     deborphan | xargs apt-get -y remove --purge || { echo "Failed to remove orphaned packages"; exit 1; }
   fi
 
-  # Clean Docker system (if installed)
   if command -v docker > /dev/null; then
     print_message "Cleaning up Docker system..."
     docker system prune -af || { echo "Failed to prune Docker system"; exit 1; }
@@ -131,7 +136,6 @@ function deep_clean {
     docker image prune -a --filter "until=24h" -f || { echo "Failed to prune Docker images"; exit 1; }
   fi
 
-  # Additional system-wide cleanup
   print_message "Removing old kernels (if applicable)..."
   if command -v dpkg > /dev/null; then
     dpkg --list | grep 'linux-image' | awk '{ print $2 }' | grep -v $(uname -r) | xargs apt-get -y purge || {
@@ -144,41 +148,46 @@ function deep_clean {
 }
 
 # Confirm and execute deep clean
-while true; do
-  read -p "Do you want to perform a deep clean of the system? (yes/no) [yes]: " deep_clean_choice
-  deep_clean_choice=${deep_clean_choice:-yes}
-  case "$deep_clean_choice" in
-    [Yy]*)
-      deep_clean
-      break
-      ;;
-    [Nn]*)
-      print_message "Deep clean skipped."
-      exit 0
-      ;;
-    *)
-      echo "Please answer yes or no."
-      ;;
-  esac
-done
+ask_confirmation "Do you want to perform a deep clean of the system?" && deep_clean
 
 # Confirm and execute system reboot
-while true; do
-  read -p "Do you want to reboot the system now? (yes/no) [yes]: " reboot_choice
-  reboot_choice=${reboot_choice:-yes}
-  case "$reboot_choice" in
-    [Yy]*)
-      print_message "Rebooting the system..."
-      reboot
-      break
-      ;;
-    [Nn]*)
-      print_message "Reboot skipped. You can reboot later if needed."
-      break
-      ;;
-    *)
-      echo "Please answer yes or no."
-      ;;
-  esac
-done
+ask_confirmation "Do you want to reboot the system now?" && reboot
+
+# Function to ask for user confirmation
+ask_confirmation() {
+  local question="$1"
+  while true; do
+    read -p "$question (yes/no) [yes]: " user_input
+    user_input=${user_input:-yes}
+    case "$user_input" in
+      [Yy]*)
+        return 0
+        ;;
+      [Nn]*)
+        print_message "Operation skipped."
+        return 1
+        ;;
+      *)
+        echo "Please answer yes or no."
+        ;;
+    esac
+  done
+}
+
+# Check for command-line arguments
+case "$1" in
+  --help)
+    display_help
+    ;;
+  --install)
+    install_script
+    ;;
+  --update)
+    update_script
+    ;;
+  *)
+    print_message "Invalid option. Use --help for usage instructions."
+    exit 1
+    ;;
+esac
 
