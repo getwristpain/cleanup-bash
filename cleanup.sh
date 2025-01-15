@@ -6,6 +6,27 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+# Function to ask for user confirmation
+ask_confirmation() {
+  local question="$1"
+  while true; do
+    read -p "$question (yes/no) [yes]: " user_input
+    user_input=${user_input:-yes}
+    case "$user_input" in
+      [Yy]*)
+        return 0
+        ;;
+      [Nn]*)
+        print_message "Operation skipped."
+        return 1
+        ;;
+      *)
+        echo "Please answer yes or no."
+        ;;
+    esac
+  done
+}
+
 # Function to display styled messages
 print_message() {
   echo -e "\e[1;34m$1\e[0m"
@@ -30,7 +51,6 @@ display_help() {
   echo "  GitHub Repository: https://github.com/getwristpain/cleanup-bash"
   exit 0
 }
-
 
 # Install script to user's home directory and set up alias
 install_script() {
@@ -118,76 +138,5 @@ deep_clean() {
   for user_dir in /home/*; do
     if [[ -d "$user_dir" ]]; then
       print_message "Cleaning hidden cache files in $user_dir..."
-      rm -rf "$user_dir"/.cache/* || { echo "Failed to clean .cache for $user_dir"; exit 1; }
-      rm -rf "$user_dir"/.local/share/Trash/* || { echo "Failed to clean trash for $user_dir"; exit 1; }
-      rm -rf "$user_dir"/.config/* || { echo "Failed to clean .config for $user_dir"; exit 1; }
-    fi
-  done
-
-  if command -v deborphan > /dev/null; then
-    print_message "Removing orphaned packages..."
-    deborphan | xargs apt-get -y remove --purge || { echo "Failed to remove orphaned packages"; exit 1; }
-  fi
-
-  if command -v docker > /dev/null; then
-    print_message "Cleaning up Docker system..."
-    docker system prune -af || { echo "Failed to prune Docker system"; exit 1; }
-    docker volume prune -f || { echo "Failed to prune Docker volumes"; exit 1; }
-    docker image prune -a --filter "until=24h" -f || { echo "Failed to prune Docker images"; exit 1; }
-  fi
-
-  print_message "Removing old kernels (if applicable)..."
-  if command -v dpkg > /dev/null; then
-    dpkg --list | grep 'linux-image' | awk '{ print $2 }' | grep -v $(uname -r) | xargs apt-get -y purge || {
-      echo "Failed to remove old kernels"
-      exit 1
-    }
-  fi
-
-  print_message "Deep clean completed successfully!"
-}
-
-# Confirm and execute deep clean
-ask_confirmation "Do you want to perform a deep clean of the system?" && deep_clean
-
-# Confirm and execute system reboot
-ask_confirmation "Do you want to reboot the system now?" && reboot
-
-# Function to ask for user confirmation
-ask_confirmation() {
-  local question="$1"
-  while true; do
-    read -p "$question (yes/no) [yes]: " user_input
-    user_input=${user_input:-yes}
-    case "$user_input" in
-      [Yy]*)
-        return 0
-        ;;
-      [Nn]*)
-        print_message "Operation skipped."
-        return 1
-        ;;
-      *)
-        echo "Please answer yes or no."
-        ;;
-    esac
-  done
-}
-
-# Check for command-line arguments
-case "$1" in
-  --help)
-    display_help
-    ;;
-  --install)
-    install_script
-    ;;
-  --update)
-    update_script
-    ;;
-  *)
-    print_message "Invalid option. Use --help for usage instructions."
-    exit 1
-    ;;
-esac
+      rm -rf "$user_dir"/.cac
 
